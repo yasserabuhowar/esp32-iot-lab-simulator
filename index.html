@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مختبر ESP32 للحرارة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a lab instructor at a lit bench — calm, exact, every claim tied to the real sketch.ino.
+   IDEA: an electronics bench under a key light; the circuit runs and its data leaves for the cloud.
+   PICTURE: a 3D bench — ESP32, DHT22, LCD 16x2, buzzer, button, jumper wires — live, with packets rising and an offline buffer stacking.
+   COLOUR/TYPE: night bench slate, signal teal = online, amber = buffered, alarm red; IBM Plex Sans Arabic + Plex Mono.
+   LAYOUT: stage and guided tour side by side; below, controls · dashboard · serial monitor in one ruled row. */
+:root{color-scheme:light dark;--bg:light-dark(#f2f3f0,#090c10);--ink:light-dark(#11151a,#e6e9ec);--mute:light-dark(#5a626b,#97a1aa);--line:light-dark(#d9dcd6,#1d242c);--card:light-dark(#fff,#0f141a);--soft:light-dark(#eef0ec,#141a21);--tl:light-dark(#0b8a79,#36d3bd);--tlbg:light-dark(#dff3ef,#0d2925);--am:#f0a330;--rd:#ef4136;--rdbg:light-dark(#fde7e5,#2e1210)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
+.mono{font-family:"IBM Plex Mono",monospace}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px max(4vw,16px);border-bottom:1px solid var(--line)}
+header h1{font-size:clamp(20px,2.4vw,26px);margin:0;line-height:1.2}
+header p{margin:0;color:var(--mute);font-size:14px}
+.pills{display:flex;gap:8px;margin-inline-start:auto;flex-wrap:wrap}
+.pill{font:600 13px "IBM Plex Mono",monospace;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);white-space:nowrap;direction:ltr}
+.pill.on{color:var(--tl);border-color:var(--tl)}.pill.off{color:var(--am);border-color:var(--am)}.pill.al{background:var(--rd);border-color:var(--rd);color:#fff}
+main{padding:clamp(14px,2vw,24px) max(4vw,16px);max-width:1500px;margin:0 auto}
+.lab{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:18px}
+.stage{position:relative;height:clamp(420px,64vh,700px);border-radius:18px;overflow:hidden;background:radial-gradient(90% 80% at 50% 25%,#1b232d,#080b0f 75%);touch-action:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lbls{position:absolute;inset:0;pointer-events:none}
+.lb{position:absolute;transform:translate(-50%,-100%);font:600 12px "IBM Plex Mono",monospace;color:#e9eef2;background:rgba(10,14,19,.78);border:1px solid rgba(255,255,255,.14);padding:3px 8px;border-radius:7px;white-space:nowrap;direction:ltr;transition:opacity .2s}
+.lb.f{border-color:#36d3bd;color:#36d3bd}
+.lb.bf{border-color:var(--am);color:var(--am)}
+.hud{position:absolute;top:12px;inset-inline-start:12px;display:flex;gap:8px;flex-wrap:wrap}
+.hint{position:absolute;bottom:10px;inset-inline:12px;text-align:center;font-size:12px;color:#8994a0;pointer-events:none}
+.err{position:absolute;inset:0;display:grid;place-items:center;color:#9aa;padding:24px;text-align:center}
+.tour{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:12px;max-height:clamp(420px,64vh,700px);overflow:auto}
+.step-n{font:600 13px "IBM Plex Mono",monospace;color:var(--tl)}
+.tour h2{margin:0;font-size:clamp(22px,2.2vw,28px);line-height:1.15;text-wrap:balance}
+.tour p{margin:0}
+.wl{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.wl li{display:flex;align-items:center;gap:10px;font-size:14px}
+.sw{width:22px;height:6px;border-radius:3px;flex:none}
+.wl b{font:600 13px "IBM Plex Mono",monospace;direction:ltr}
+pre{margin:0;overflow-x:auto;background:#0b1016;color:#d6dde4;border:1px solid #1d2630;border-radius:12px;padding:14px;font:500 13px/1.6 "IBM Plex Mono",monospace;direction:ltr;text-align:left}
+pre .c{color:#7f8b97}pre .k{color:#7cc7ff}pre .n{color:#f0a330}
+.nav{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px;flex-wrap:wrap}
+.dots{display:flex;gap:6px;margin-inline-end:auto}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);border:0;padding:0;cursor:pointer}
+.dot[aria-current=true]{background:var(--tl);width:22px;border-radius:6px}
+button{font:600 15px "IBM Plex Sans Arabic",sans-serif;cursor:pointer}
+.btn{min-height:44px;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--ink)}
+.btn.pri{background:var(--tl);border-color:var(--tl);color:var(--bg)}
+.btn.try{background:var(--tlbg);color:var(--tl);border-color:transparent}
+.btn[aria-pressed=true]{background:var(--am);border-color:var(--am);color:#111}
+button:focus-visible,input:focus-visible{outline:3px solid var(--am);outline-offset:2px}
+.row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr);gap:18px;margin-top:18px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+.panel h3{margin:0 0 12px;font-size:17px;display:flex;align-items:center;gap:8px}
+.panel h3 small{color:var(--mute);font-weight:400;font-size:13px}
+.sl{margin-bottom:14px}
+.sl label{display:flex;justify-content:space-between;align-items:baseline;font-weight:600}
+.sl output{font:600 26px "IBM Plex Mono",monospace;direction:ltr}
+input[type=range]{width:100%;height:32px;accent-color:var(--tl)}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.tests{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tests button{min-height:52px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-align:start;font-size:14px;line-height:1.3}
+.tests button span{display:block;font:500 12px "IBM Plex Mono",monospace;color:var(--mute)}
+.tests button[aria-current=true]{border-color:var(--tl);box-shadow:inset 0 0 0 1px var(--tl)}
+.exp{margin-top:10px;font-size:14px;color:var(--mute);min-height:42px}
+.gs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g{background:var(--soft);border-radius:12px;padding:10px 10px 6px;text-align:center}
+.g svg{width:100%;height:auto;display:block}
+.g .v{font:600 22px "IBM Plex Mono",monospace;margin-top:-30px;direction:ltr}
+.g .k{font-size:12px;color:var(--mute);direction:ltr}
+.st{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px 12px;border-radius:12px;background:var(--soft);font-weight:600}
+.led{width:14px;height:14px;border-radius:50%;background:#3a4450;flex:none}
+.st.al{background:var(--rdbg);color:var(--rd)}.st.al .led{background:var(--rd);box-shadow:0 0 12px var(--rd)}
+.st.ok .led{background:var(--tl)}
+.fig{position:relative;height:160px}.fig svg{position:absolute;inset:0;width:100%;height:100%}
+.meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}
+.lg{display:flex;gap:14px;font-size:12px;color:var(--mute)}.lg i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-inline-end:5px;vertical-align:middle}
+.ser{white-space:pre;height:330px;overflow:auto;background:#0b1016;border-radius:12px;padding:10px 12px;font:500 12.5px/1.65 "IBM Plex Mono",monospace;color:#c9d2da;direction:ltr;text-align:left;border:1px solid #1d2630}
+.ser .net{color:#7cc7ff}.ser .warn{color:#f0a330}.ser .al{color:#ff6b5e}.ser .ok{color:#36d3bd}
+footer{color:var(--mute);font-size:13px;padding:6px max(4vw,16px) 28px;max-width:1500px;margin:0 auto}
+@media(max-width:1100px){.row3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.row3 .serial{grid-column:1/-1}}
+@media(max-width:960px){.lab{grid-template-columns:minmax(0,1fr)}.tour{max-height:none}}
+@media(max-width:640px){.row3{grid-template-columns:minmax(0,1fr)}.stage{height:420px}.pills{margin-inline-start:0}.tests,.tg{grid-template-columns:1fr}}
+@media(max-width:640px){.lb{font-size:10px;padding:2px 6px}}
+@media(prefers-reduced-motion:reduce){.lb{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>مختبر ESP32: نظام مراقبة الحرارة والرطوبة</h1><p>ESP32 · DHT22 · LCD I2C · Buzzer · MQTT → ThingsBoard</p></div>
+  <div class="pills"><span class="pill" id="pNet">WiFi …</span><span class="pill" id="pAl">Normal</span><span class="pill" id="pBuf">buffered=0</span></div>
+</header>
+<main>
+<div class="lab">
+  <div class="stage" id="stage">
+    <div class="lbls" id="lbls"></div>
+    <div class="hint">اسحب للتدوير · قرّب بإصبعين · اضغط أي قطعة لشرحها · اضغط الزر الأصفر لقطع WiFi</div>
+  </div>
+  <aside class="tour" aria-live="polite">
+    <div class="step-n" id="sN"></div>
+    <h2 id="sT"></h2>
+    <p id="sB"></p>
+    <ul class="wl" id="sW"></ul>
+    <pre id="sC"></pre>
+    <div id="sX"></div>
+    <div class="nav"><div class="dots" id="dots"></div>
+      <button class="btn" id="prev">السابق</button><button class="btn pri" id="next">التالي</button></div>
+  </aside>
+</div>
+
+<div class="row3">
+  <section class="panel">
+    <h3>لوحة التحكم <small>محاكي الحساس</small></h3>
+    <div class="sl"><label for="t">الحرارة <output id="tO">25.0°C</output></label><input type="range" id="t" min="-40" max="85" step="0.5" value="25"></div>
+    <div class="sl"><label for="h">الرطوبة <output id="hO">50%</output></label><input type="range" id="h" min="0" max="100" step="1" value="50"></div>
+    <div class="tg">
+      <button class="btn" id="bNet" aria-pressed="false">قطع WiFi (GPIO4)</button>
+      <button class="btn" id="bFault" aria-pressed="false">فصل سلك الحساس</button>
+      <button class="btn" id="bSnd" aria-pressed="false">صوت الإنذار</button>
+      <button class="btn" id="bLbl" aria-pressed="true">أسماء القطع</button>
+    </div>
+    <h3>حالات الاختبار</h3>
+    <div class="tests" id="tests"></div>
+    <div class="exp" id="exp">اختر حالة لتطبيقها، ثم قارن ما يحدث بالنتيجة المتوقعة.</div>
+  </section>
+  <section class="panel">
+    <h3>لوحة ThingsBoard <small>محاكاة · الجهاز esp32-temp</small></h3>
+    <div class="gs">
+      <div class="g"><svg viewBox="0 0 120 70"><path d="M10 64 A50 50 0 0 1 110 64" fill="none" stroke="currentColor" stroke-opacity=".12" stroke-width="10" stroke-linecap="round"/><path id="gT" d="M10 64 A50 50 0 0 1 110 64" fill="none" stroke="#f0a330" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="v" id="vT">--</div><div class="k">temperature °C</div></div>
+      <div class="g"><svg viewBox="0 0 120 70"><path d="M10 64 A50 50 0 0 1 110 64" fill="none" stroke="currentColor" stroke-opacity=".12" stroke-width="10" stroke-linecap="round"/><path id="gH" d="M10 64 A50 50 0 0 1 110 64" fill="none" stroke="#36a9d3" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="v" id="vH">--</div><div class="k">humidity %</div></div>
+    </div>
+    <div class="st" id="stA"><span class="led"></span><span id="stTx">بانتظار أول قراءة</span></div>
+    <div class="lg"><span><i style="background:#f0a330"></i>temperature</span><span><i style="background:#36a9d3"></i>humidity</span><span><i style="background:#ef4136"></i>عتبة 35°C</span></div>
+    <div class="fig" id="chart"><svg id="cs"></svg></div>
+    <div class="meta"><span id="mLast">آخر استلام: —</span><span id="mCnt">العينات: 0</span></div>
+  </section>
+  <section class="panel serial">
+    <h3>Serial Monitor <small>115200 baud</small></h3>
+    <div class="ser" id="ser" role="log"></div>
+  </section>
+</div>
+</main>
+<footer>محاكاة تعليمية تتبع منطق sketch.ino نفسه: القراءة كل ثانيتين، الإرسال كل 5 ثوانٍ، الإنذار فوق 35°C ويتوقف عند 34°C، ومخزن مؤقت حتى 60 عينة. لا تغني عن تشغيل الكود الحقيقي في Wokwi وربطه بـ ThingsBoard.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const hl=s=>esc(s).replace(/(\/\/.*)$/gm,'<span class="c">$1</span>').replace(/\b(void|bool|float|const|if|else|return|int|char|uint8_t|struct|#define|#include)\b/g,'<span class="k">$1</span>').replace(/\b(\d+(\.\d+)?)\b/g,'<span class="n">$1</span>');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ================= simulation (mirrors sketch.ino) ================= */
+const S={T:25,H:50,fault:false,outage:false,net:'connecting',lastT:NaN,lastH:NaN,alarm:false,sensorError:false,bad:0,buf:[],series:[],sound:false};
+const BUF_SIZE=60,MAX_BAD=3,ON=35,OFF=34;
+let hooks={publish:()=>{},buffer:()=>{},flush:()=>{},redraw:()=>{}};
+const ser=$('#ser');
+function log(m,c=''){const d=document.createElement('div');if(c)d.className=c;d.textContent=m;ser.appendChild(d);while(ser.children.length>160)ser.firstChild.remove();ser.scrollTop=ser.scrollHeight}
+const online=()=>S.net==='online';
+const statusText=()=>S.sensorError?'SENSOR ERROR':S.alarm?'HIGH TEMP!':'Normal';
+
+function readSensor(){
+  const n=()=>(Math.random()-.5)*.2;
+  const t=S.fault?NaN:+(S.T+n()).toFixed(1),h=S.fault?NaN:Math.round(S.H+n()*2);
+  const ok=!isNaN(t)&&!isNaN(h)&&t>=-40&&t<=80&&h>=0&&h<=100;
+  if(ok){S.bad=0;S.sensorError=false;S.lastT=t;S.lastH=h;
+    const was=S.alarm;
+    if(!S.alarm&&t>ON)S.alarm=true;else if(S.alarm&&t<=OFF)S.alarm=false;
+    if(S.alarm!==was)log(S.alarm?`[ALARM] temperature ${t.toFixed(1)}C > ${ON}C -> buzzer ON`:`[ALARM] temperature back to ${t.toFixed(1)}C <= ${OFF}C -> buzzer OFF`,S.alarm?'al':'ok');
+  }else{S.bad++;log(`[WARN] invalid reading discarded (${Math.min(S.bad,MAX_BAD)}/${MAX_BAD})`,'warn');
+    if(S.bad>=MAX_BAD&&!S.sensorError){S.sensorError=true;S.alarm=false}}
+  log(`T=${isNaN(S.lastT)?'nan':S.lastT.toFixed(1)}C H=${isNaN(S.lastH)?'nan':S.lastH.toFixed(0)}% | ${statusText()} | cloud=${online()?'online':'offline'} | buffered=${S.buf.length}`);
+  ui();
+}
+function sendOrBuffer(){
+  if(S.sensorError||isNaN(S.lastT))return;
+  const s={t:S.lastT,h:S.lastH,alarm:S.alarm,ts:Date.now()};
+  if(online()){receive(s);hooks.publish()}
+  else{S.buf.push(s);if(S.buf.length>BUF_SIZE)S.buf.shift();hooks.buffer();ui()}
+}
+function receive(s){S.series.push(s);S.series.sort((a,b)=>a.ts-b.ts);if(S.series.length>400)S.series.shift();dash()}
+function setOutage(v){
+  if(S.outage===v)return;S.outage=v;
+  if(v){S.net='offline';log('[BTN] WiFi outage simulated -> offline mode','warn');ui();return}
+  log('[BTN] outage cleared','net');S.net='connecting';ui();
+  setTimeout(()=>{if(S.outage)return;log('[NET] connecting WiFi...','net');
+    setTimeout(()=>{if(S.outage)return;log('[NET] connecting MQTT...','net');
+      setTimeout(()=>{if(S.outage)return;log('[NET] MQTT connected','ok');S.net='online';
+        const q=S.buf.splice(0);if(q.length){log(`[NET] flushing ${q.length} buffered samples (original timestamps)`,'ok');
+          q.forEach((s,i)=>setTimeout(()=>{receive(s);hooks.flush()},i*140))}ui()},700)},900)},600);
+}
+log('System started','ok');log('[NET] connecting WiFi...','net');
+setTimeout(()=>{log('[NET] connecting MQTT...','net')},900);
+setTimeout(()=>{if(!S.outage){log('[NET] MQTT connected','ok');S.net='online';ui()}},1800);
+setInterval(readSensor,2000);setInterval(sendOrBuffer,5000);setTimeout(readSensor,400);
+
+/* audio */
+let ac=null,beepT=0;
+function beep(){if(!ac)return;try{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=2100;g.gain.value=.04;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.12)}catch(e){}}
+setInterval(()=>{if(S.sound&&S.alarm&&!S.sensorError)beep()},420);
+
+/* ================= UI panels ================= */
+const pNet=$('#pNet'),pAl=$('#pAl'),pBuf=$('#pBuf');
+function ui(){
+  pNet.textContent=S.net==='online'?'cloud=online':S.net==='connecting'?'connecting…':'cloud=offline';
+  pNet.className='pill '+(S.net==='online'?'on':'off');
+  pAl.textContent=statusText();pAl.className='pill '+(S.alarm||S.sensorError?'al':'');
+  pBuf.textContent='buffered='+S.buf.length;pBuf.className='pill '+(S.buf.length?'off':'');
+  $('#bNet').setAttribute('aria-pressed',S.outage);$('#bNet').textContent=S.outage?'أعد WiFi (GPIO4)':'قطع WiFi (GPIO4)';
+  $('#bFault').setAttribute('aria-pressed',S.fault);
+  hooks.redraw();
+}
+function dash(){
+  const l=S.series[S.series.length-1];if(!l)return;
+  const p=(v,a,b)=>100-Math.max(0,Math.min(100,(v-a)/(b-a)*100));
+  $('#gT').style.strokeDashoffset=p(l.t,-10,60);$('#gH').style.strokeDashoffset=p(l.h,0,100);
+  $('#gT').setAttribute('stroke',l.alarm?'#ef4136':'#f0a330');
+  $('#vT').textContent=l.t.toFixed(1);$('#vH').textContent=l.h.toFixed(0);
+  const st=$('#stA');st.className='st '+(l.alarm?'al':'ok');
+  $('#stTx').textContent=l.alarm?'alarm = true · High Temperature':'alarm = false · Normal';
+  $('#mLast').textContent='آخر استلام: '+new Date(l.ts).toLocaleTimeString('en-GB');
+  $('#mCnt').textContent='العينات: '+S.series.length;drawChart();
+}
+const cs=$('#cs');
+function drawChart(){
+  const W=cs.clientWidth,H=cs.clientHeight;if(!W)return;
+  const now=Date.now(),win=150000,x=ts=>8+(ts-(now-win))/win*(W-16),y=v=>H-10-(v/100)*(H-20);
+  const pts=S.series.filter(s=>s.ts>now-win);
+  const line=(k,c)=>pts.length?`<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" points="${pts.map(s=>x(s.ts).toFixed(1)+','+y(s[k]).toFixed(1)).join(' ')}"/>`:'';
+  const dotsA=pts.filter(s=>s.alarm).map(s=>`<circle cx="${x(s.ts).toFixed(1)}" cy="${y(s.t).toFixed(1)}" r="3.5" fill="#ef4136"/>`).join('');
+  cs.innerHTML=`<line x1="8" x2="${W-8}" y1="${y(35)}" y2="${y(35)}" stroke="#ef4136" stroke-dasharray="4 4" stroke-opacity=".7"/>
+  ${[0,50,100].map(v=>`<line x1="8" x2="${W-8}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" stroke-opacity=".08"/>`).join('')}
+  ${line('h','#36a9d3')}${line('t','#f0a330')}${dotsA}
+  ${pts.length?'':`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="currentColor" opacity=".5" font-size="13">بانتظار البيانات…</text>`}`;
+}
+new ResizeObserver(drawChart).observe($('#chart'));setInterval(drawChart,1000);
+
+const tI=$('#t'),hI=$('#h');
+const syncS=()=>{S.T=+tI.value;S.H=+hI.value;$('#tO').textContent=S.T.toFixed(1)+'°C';$('#hO').textContent=S.H+'%';$('#tO').style.color=S.T>80?'var(--am)':S.T>ON?'var(--rd)':''};
+tI.oninput=syncS;hI.oninput=syncS;
+$('#bNet').onclick=()=>setOutage(!S.outage);
+$('#bFault').onclick=()=>{S.fault=!S.fault;log(S.fault?'[TEST] DHT22 data wire disconnected':'[TEST] DHT22 data wire reconnected','warn');ui()};
+$('#bSnd').onclick=e=>{S.sound=!S.sound;e.currentTarget.setAttribute('aria-pressed',S.sound);if(S.sound&&!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(_){}}};
+let showL=true;$('#bLbl').onclick=e=>{showL=!showL;e.currentTarget.setAttribute('aria-pressed',showL);$('#lbls').style.display=showL?'':'none'};
+
+const TESTS=[
+ {n:'1 · حرارة طبيعية',m:'T=25 · WiFi on',f:()=>{tI.value=25;S.fault=false;setOutage(false)},e:'المتوقع: Buzzer مطفأ، LCD يعرض Normal و ON، وعلى ThingsBoard ‏alarm=false.'},
+ {n:'2 · حرارة مرتفعة',m:'T=38',f:()=>{tI.value=38;S.fault=false;setOutage(false)},e:'المتوقع: Buzzer يعمل، LCD يعرض HIGH TEMP!، وalarm=true. أنزل الحرارة إلى 34 أو أقل ليتوقف (فوق 34 يبقى يعمل: هذا هو الـ hysteresis).'},
+ {n:'3 · انقطاع WiFi',m:'GPIO4 · T=38',f:()=>{tI.value=38;S.fault=false;setOutage(true)},e:'المتوقع: الإنذار يستمر محليًا، LCD يعرض OFF، والعينات تتكدس في المخزن (المكعبات البرتقالية). أعد WiFi لتُرسل بتوقيتها الأصلي.'},
+ {n:'4 · قراءة غير صالحة',m:'SDA disconnected',f:()=>{S.fault=true;setOutage(false)},e:'المتوقع: 3 تحذيرات في Serial ثم SENSOR ERROR، يتوقف الإنذار ولا تُرسل أي بيانات. أعد توصيل السلك من الزر أعلاه.'}];
+$('#tests').innerHTML=TESTS.map((t,i)=>`<button data-i="${i}">${t.n}<span>${t.m}</span></button>`).join('');
+$('#tests').onclick=e=>{const b=e.target.closest('button');if(!b)return;const t=TESTS[+b.dataset.i];t.f();syncS();log(`[TEST] case ${b.dataset.i*1+1} applied`,'warn');ui();
+  document.querySelectorAll('#tests button').forEach(x=>x.setAttribute('aria-current',x===b));$('#exp').textContent=t.e};
+
+/* ================= guided tour ================= */
+const W={red:'#e5383b',blk:'#3a3f46',yel:'#f2c94c',org:'#f2994a',grn:'#27ae60',blu:'#2f80ed',pur:'#9b51e0'};
+const STEPS=[
+{t:'النظام كاملًا',b:'نظام طرفي (Edge): يقرأ الحرارة والرطوبة كل ثانيتين، ويقرر الإنذار داخل ESP32 نفسه، ويرسل القراءات إلى ThingsBoard عبر MQTT كل 5 ثوانٍ. إذا انقطع WiFi يستمر كل شيء محليًا وتُخزَّن القراءات حتى يعود الاتصال.',part:null,
+ code:`#define DHT_PIN     15
+#define BUZZER_PIN  18
+#define SIM_BTN_PIN 4    // يحاكي انقطاع WiFi
+// LCD I2C: SDA=21, SCL=22, address 0x27`},
+{t:'ESP32: العقل',b:'معالج ثنائي النواة حتى 240MHz مع WiFi وBluetooth. كل منافذه تعمل على 3.3V. الحلقة الرئيسية لا تتوقف أبدًا بانتظار الشبكة (non-blocking)، لذلك يستمر القياس والإنذار مهما حدث للاتصال.',part:'esp',
+ code:`// مبسّط من sketch.ino
+void loop() {
+  maintainWifi();  maintainMqtt();   // لا تحجب
+  if (millis() - tRead >= 2000) readSensor();
+  if (millis() - tSend >= 5000) sendOrBuffer();
+}`},
+{t:'DHT22: الحساس',b:'يقيس الحرارة من −40 إلى 80°C والرطوبة من 0 إلى 100%، ويحتاج ثانيتين على الأقل بين قراءتين. الكود يرفض أي قيمة NaN أو خارج النطاق، وبعد 3 قراءات خاطئة متتالية يعلن SENSOR ERROR.',part:'dht',
+ wl:[[W.red,'VCC','3V3'],[W.yel,'DATA','GPIO15'],[W.blk,'GND','GND']],
+ code:`bool ok = !isnan(t) && !isnan(h)
+       && t >= -40 && t <= 80
+       && h >= 0   && h <= 100;
+if (!ok && ++badReads >= 3) sensorError = true;`,
+ x:['جرّب حرارة خارج النطاق (85°C)',()=>{tI.value=85;syncS()}]},
+{t:'شاشة LCD 16×2 عبر I2C',b:'وحدة I2C على ظهر الشاشة تختصر 16 سلكًا إلى 4. السطر الأول للقراءات، والثاني للحالة، وفي آخره ON أو OFF لحالة الاتصال بالسحابة.',part:'lcd',
+ wl:[[W.blu,'SDA','GPIO21'],[W.pur,'SCL','GPIO22'],[W.red,'VCC','VIN (5V)'],[W.blk,'GND','GND']],
+ code:`LiquidCrystal_I2C lcd(0x27, 16, 2);
+lcd.printf("T:%.1fC H:%.0f%%", lastT, lastH);
+lcd.setCursor(0, 1);
+lcd.printf("%-12s%s", statusText(), mqttReady() ? "ON" : "OFF");`},
+{t:'Buzzer: القرار الطرفي',b:'الإنذار يعمل فوق 35°C ولا يتوقف إلا عند 34°C أو أقل. هذا الفارق (Hysteresis) يمنع تذبذب الصوت عندما تتأرجح الحرارة حول 35. القرار يُتخذ داخل ESP32 ولا ينتظر ThingsBoard.',part:'buz',
+ wl:[[W.org,'+','GPIO18'],[W.blk,'−','GND']],
+ code:`if (!alarmOn && t > 35.0)        alarmOn = true;
+else if (alarmOn && t <= 34.0)  alarmOn = false;
+digitalWrite(BUZZER_PIN, alarmOn ? HIGH : LOW);`,
+ x:['ارفع الحرارة إلى 38°C',()=>{tI.value=38;syncS()}]},
+{t:'الزر ومخزن الانقطاع',b:'الزر الأصفر يحاكي انقطاع WiFi. أثناء الانقطاع تُحفظ كل عينة في مخزن دائري يتسع لـ 60 عينة (إذا امتلأ يُستبدل الأقدم). عند عودة الاتصال تُرسل بتوقيتها الأصلي، فيظهر الخط كاملًا على اللوحة.',part:'btn',
+ wl:[[W.grn,'pin','GPIO4 (INPUT_PULLUP)'],[W.blk,'pin','GND']],
+ code:`struct Sample { float t, h; bool alarm; unsigned long ms; };
+Sample buf[60];
+void bufPush(const Sample &s) {
+  buf[(bufHead + bufCount) % 60] = s;
+  if (bufCount < 60) bufCount++; else bufHead = (bufHead + 1) % 60;
+}`,
+ x:['اقطع WiFi الآن',()=>setOutage(true)]},
+{t:'MQTT إلى ThingsBoard',b:'كل 5 ثوانٍ تُرسل حزمة JSON إلى الموضوع v1/devices/me/telemetry. اسم المستخدم هو Access Token الخاص بالجهاز، وكلمة المرور فارغة. الحقل ts يحفظ وقت القياس الحقيقي حتى للعينات المؤجلة.',part:'esp',
+ code:`mqtt.connect("esp32-temp-monitor", TB_TOKEN, nullptr);
+// {"ts":1763397000000,"values":{"temperature":25.0,
+//   "humidity":50.0,"alarm":false,"status":"Normal"}}
+mqtt.publish("v1/devices/me/telemetry", payload);`},
+{t:'الأمان',b:'الرمز في secrets.h ولا يُطبع أبدًا في Serial. لكن المنفذ 1883 غير مشفّر، فمن يراقب الشبكة يرى الرمز والقراءات؛ الاستخدام الحقيقي يحتاج TLS على 8883. وانتبه: رابط Wokwi المشارَك يكشف secrets.h لكل من يفتحه، فأعد توليد الرمز بعد العرض.',part:null,
+ code:`// secrets.h — لا يُرفع إلى GitHub ولا يُطبع
+#define WIFI_SSID "Wokwi-GUEST"
+#define WIFI_PASS ""
+#define TB_HOST   "thingsboard.cloud"
+#define TB_TOKEN  "PUT_YOUR_DEVICE_ACCESS_TOKEN_HERE"`}];
+let step=0,goStep=()=>{};
+$('#dots').innerHTML=STEPS.map((s,i)=>`<button class="dot" data-i="${i}" aria-label="الخطوة ${i+1}"></button>`).join('');
+function showStep(i){
+  step=(i+STEPS.length)%STEPS.length;const s=STEPS[step];
+  $('#sN').textContent=`الخطوة ${step+1} من ${STEPS.length}`;$('#sT').textContent=s.t;$('#sB').textContent=s.b;
+  $('#sW').innerHTML=(s.wl||[]).map(w=>`<li><span class="sw" style="background:${w[0]}"></span>${w[1]} → <b>${w[2]}</b></li>`).join('');
+  $('#sC').innerHTML=hl(s.code);
+  $('#sX').innerHTML=s.x?`<button class="btn try" id="tryB">${s.x[0]}</button>`:'';
+  if(s.x)$('#tryB').onclick=s.x[1];
+  document.querySelectorAll('.dot').forEach((d,k)=>d.setAttribute('aria-current',k===step));
+  $('#next').textContent=step===STEPS.length-1?'من البداية':'التالي';
+  goStep(s.part);
+}
+$('#dots').onclick=e=>{const d=e.target.closest('.dot');if(d)showStep(+d.dataset.i)};
+$('#prev').onclick=()=>showStep(step-1);$('#next').onclick=()=>showStep(step+1);
+
+/* ================= 3D bench ================= */
+const stage=$('#stage');
+if(!window.THREE||!THREE.OrbitControls){stage.insertAdjacentHTML('beforeend','<div class="err">تعذّر تحميل العرض ثلاثي الأبعاد. المحاكاة واللوحات أدناه تعمل.</div>');showStep(0);ui()}
+else{
+const ren=new THREE.WebGLRenderer({antialias:true,alpha:true});
+ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.outputEncoding=THREE.sRGBEncoding;
+ren.toneMapping=THREE.ACESFilmicToneMapping;ren.toneMappingExposure=1.05;
+ren.shadowMap.enabled=true;ren.shadowMap.type=THREE.PCFSoftShadowMap;
+stage.prepend(ren.domElement);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x080b0f,32,62);
+const cam=new THREE.PerspectiveCamera(36,1,.1,200);
+const HOME={p:new THREE.Vector3(2,15.5,17.5),t:new THREE.Vector3(0.5,1.2,-0.6)};
+cam.position.copy(HOME.p);
+const ctr=new THREE.OrbitControls(cam,ren.domElement);ctr.target.copy(HOME.t);
+ctr.enableDamping=true;ctr.dampingFactor=.08;ctr.minDistance=5;ctr.maxDistance=40;ctr.maxPolarAngle=1.42;ctr.screenSpacePanning=true;
+
+/* environment for reflections */
+const pm=new THREE.PMREMGenerator(ren),es=new THREE.Scene();es.background=new THREE.Color(0x0a0d11);
+const panel=(w,h,c,p,r)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide}));m.position.set(...p);m.rotation.set(...r);es.add(m)};
+panel(24,24,0xffffff,[0,18,0],[Math.PI/2,0,0]);panel(14,10,0x9fb4c8,[-18,6,0],[0,Math.PI/2,0]);panel(14,8,0xffe2c4,[0,5,18],[0,0,0]);panel(10,6,0x55657a,[16,4,-8],[0,-Math.PI/2,0]);
+scene.environment=pm.fromScene(es,.03).texture;
+
+scene.add(new THREE.HemisphereLight(0xcfe0ff,0x0d1014,.35));
+const key=new THREE.DirectionalLight(0xfff4e8,1.7);key.position.set(7,16,9);key.castShadow=true;
+key.shadow.mapSize.set(2048,2048);Object.assign(key.shadow.camera,{left:-15,right:15,top:12,bottom:-12,near:1,far:45});key.shadow.bias=-.0004;key.shadow.radius=4;scene.add(key);
+const rim=new THREE.DirectionalLight(0x8fb2ff,.6);rim.position.set(-10,7,-12);scene.add(rim);
+
+const lin=c=>new THREE.Color(c).convertSRGBToLinear();
+const M=(c,o={})=>{if(o.emissive!==undefined)o.emissive=lin(o.emissive);return new THREE.MeshStandardMaterial(Object.assign({color:lin(c),roughness:.55,metalness:0,envMapIntensity:.6},o))};
+const tx=cv=>{const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.anisotropy=ren.capabilities.getMaxAnisotropy();return t};
+const mk=(geo,mat,p,parent,sh=true)=>{const m=new THREE.Mesh(geo,mat);m.position.set(...p);m.castShadow=sh;m.receiveShadow=true;parent.add(m);return m};
+const B=(w,h,d)=>new THREE.BoxGeometry(w,h,d),C=(r,h,s=24)=>new THREE.CylinderGeometry(r,r,h,s);
+const canvas=(w,h,f)=>{const c=document.createElement('canvas');c.width=w;c.height=h;f(c.getContext('2d'),w,h);return c};
+
+/* bench */
+const bench=mk(new THREE.PlaneGeometry(90,90),M(0x14181d,{roughness:.95,envMapIntensity:.05}),[0,0,0],scene,false);bench.rotation.x=-Math.PI/2;
+/* breadboard */
+const BB=.9;
+const bbTex=tx(canvas(1700,600,(c,w,h)=>{c.fillStyle='#ebe8e1';c.fillRect(0,0,w,h);
+  const hole=(x,y)=>{c.fillStyle='#4a4945';c.fillRect(x-4.5,y-4.5,9,9)};
+  c.lineWidth=4;[[22,'#d64545'],[98,'#3f6fd1'],[502,'#d64545'],[578,'#3f6fd1']].forEach(([y,col])=>{c.strokeStyle=col;c.beginPath();c.moveTo(40,y);c.lineTo(w-40,y);c.stroke()});
+  for(let x=60;x<w-50;x+=25.4){if(Math.floor((x-60)/25.4)%6===5)continue;[45,70,527,552].forEach(y=>hole(x,y))}
+  for(let x=60;x<w-50;x+=25.4){for(let k=0;k<5;k++){hole(x,135+k*25.4);hole(x,363+k*25.4)}}
+  c.fillStyle='#d6d2c9';c.fillRect(0,282,w,36);c.fillStyle='#c4bfb5';c.fillRect(0,298,w,4);
+  c.fillStyle='#9c978d';c.font='600 16px monospace';for(let i=0;i<60;i+=5)c.fillText(String(i+1),55+i*25.4,122)}));
+const edgeM=M(0xe3dfd7,{roughness:.7});
+mk(B(17,BB,6),[edgeM,edgeM,M(0xffffff,{map:bbTex,roughness:.75}),edgeM,edgeM,edgeM],[0,BB/2,0],scene);
+
+/* ---- ESP32 DevKit ---- */
+const esp=new THREE.Group();esp.position.set(-4.2,BB+.85,0);esp.rotation.y=-Math.PI/2;scene.add(esp);
+const PN=[['EN','VP','VN','D34','D35','D32','D33','D25','D26','D27','D14','D12','D13','GND','VIN'],['D23','D22','TX0','RX0','D21','D19','D18','D5','TX2','RX2','D4','D2','D15','GND','3V3']];
+const silk=tx(canvas(560,1040,(c)=>{c.fillStyle='#15191f';c.fillRect(0,0,560,1040);c.strokeStyle='rgba(150,165,175,.18)';c.lineWidth=5;
+  for(let i=0;i<12;i++){c.beginPath();const y=430+i*40;c.moveTo(70,y);c.lineTo(140,y);c.lineTo(170+i*6,y+40);c.lineTo(390-i*6,y+40);c.lineTo(420,y);c.lineTo(490,y);c.stroke()}
+  c.fillStyle='#e8ecef';c.font='600 21px monospace';c.textBaseline='middle';
+  PN.forEach((col,s)=>col.forEach((n,i)=>{const py=(-1.9+i*.254+2.6)*200;c.textAlign=s?'right':'left';c.fillText(n,s?560-56:56,py)}));
+  c.textAlign='center';c.font='700 24px monospace';c.fillText('ESP32 DEVKIT V1',280,820);c.font='600 18px monospace';c.fillText('EN',130,905);c.fillText('BOOT',430,905)}));
+const edge=M(0x0c0f13);
+mk(B(2.8,.16,5.2),[edge,edge,M(0xffffff,{map:silk,roughness:.6}),edge,edge,edge],[0,0,0],esp);
+mk(B(1.7,.08,2.5),M(0x1a2230),[0,.12,-1.32],esp);
+const shT=tx(canvas(320,360,(c,w,h)=>{const g=c.createLinearGradient(0,0,w,h);g.addColorStop(0,'#e3e6e9');g.addColorStop(1,'#a3aab1');c.fillStyle=g;c.fillRect(0,0,w,h);c.fillStyle='#3b4148';c.textAlign='center';c.font='700 30px monospace';c.fillText('ESPRESSIF',160,110);c.font='600 26px monospace';c.fillText('ESP-WROOM-32',160,170);c.font='500 18px monospace';c.fillText('Wi-Fi + BT + BLE',160,220)}));
+const metal=M(0xbfc5cb,{metalness:1,roughness:.28});
+mk(B(1.52,.2,1.72),[metal,metal,M(0xffffff,{map:shT,metalness:.7,roughness:.35}),metal,metal,metal],[0,.26,-.97],esp);
+const cu=M(0xc9893b,{metalness:1,roughness:.3});
+[[-.6,.06,.3,-2.35],[0,1.2,.06,-2.47],[.6,.06,.3,-2.35],[-.3,.06,.3,-2.25],[.3,.06,.3,-2.25],[0,1.2,.06,-2.13]].forEach(a=>mk(B(a[1],.012,a[2]),cu,[a[0],.165,a[3]],esp,false));
+mk(B(.78,.3,.56),metal,[0,.23,2.36],esp);
+[-.75,.75].forEach(x=>{mk(B(.36,.1,.32),M(0x2b2f35),[x,.13,2.2],esp);mk(C(.08,.08,20),M(0x111317),[x,.21,2.2],esp)});
+mk(B(.42,.08,.42),M(0x0e1013),[.35,.12,1.35],esp);mk(B(.5,.1,.32),M(0x0e1013),[-.45,.13,1.5],esp);
+mk(B(.12,.05,.08),M(0xff3b30,{emissive:0xff2a1f,emissiveIntensity:1.2}),[-.3,.105,1.95],esp,false);
+const hdr=M(0x111317),gold=M(0xd4a64a,{metalness:1,roughness:.25});
+[-1.27,1.27].forEach(x=>mk(B(.26,.26,3.84),hdr,[x,-.21,-.122],esp));
+const pads={};
+PN.forEach((col,s)=>col.forEach((n,i)=>{const x=s?1.27:-1.27,z=-1.9+i*.254;
+  mk(C(.03,.75,8),gold,[x,-.55,z],esp,false);pads[(s?'R':'L')+n]=mk(C(.085,.024,18),gold,[x,.092,z],esp,false)}));
+const antenna=new THREE.Object3D();antenna.position.set(0,.4,-2.3);esp.add(antenna);
+
+/* ---- DHT22 ---- */
+const dht=new THREE.Group();dht.position.set(.6,BB,2.05);scene.add(dht);
+const gr=tx(canvas(300,400,(c,w,h)=>{c.fillStyle='#f4f3ef';c.fillRect(0,0,w,h);c.fillStyle='#d8d6cf';
+  for(let r=0;r<9;r++)for(let k=0;k<4;k++){const x=40+k*58,y=34+r*36;c.beginPath();c.roundRect?c.roundRect(x,y,44,20,9):c.rect(x,y,44,20);c.fill()}
+  c.fillStyle='#8b8a85';c.font='600 22px monospace';c.textAlign='center';c.fillText('DHT22',150,380)}));
+const wht=M(0xf3f2ee,{roughness:.6});
+mk(B(1.5,2.05,.75),[wht,wht,wht,wht,M(0xffffff,{map:gr,roughness:.6}),wht],[0,.42+1.02,0],dht);
+mk(B(1.5,.55,.22),wht,[0,2.72,-.26],dht);mk(C(.15,.24,20),M(0x111317),[0,2.78,-.26],dht,false).rotation.x=Math.PI/2;
+const pinM=M(0xc8ccd0,{metalness:1,roughness:.3});
+const dhtPin=[];for(let k=0;k<4;k++){const x=-.381+k*.254;mk(B(.06,.44,.06),pinM,[x,.2,0],dht,false);dhtPin.push(new THREE.Vector3(x,.05,.02))}
+
+/* ---- Buzzer ---- */
+const buz=new THREE.Group();buz.position.set(3.4,BB,2.05);scene.add(buz);
+mk(C(.62,.95,40),M(0x15171a,{roughness:.45}),[0,.62,0],buz);mk(C(.13,.02,20),M(0x050505),[0,1.1,0],buz,false);
+mk(C(.42,.006,40),M(0x2a2d31,{roughness:.3}),[0,1.096,0],buz,false);
+[-.38,.38].forEach(x=>mk(C(.025,.3,8),pinM,[x,.12,0],buz,false));
+const rings=[];for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(.7,.025,8,64),new THREE.MeshBasicMaterial({color:0xff4b3a,transparent:true,opacity:0,toneMapped:false}));r.rotation.x=Math.PI/2;r.position.y=1.15;buz.add(r);rings.push(r)}
+
+/* ---- Button ---- */
+const btn=new THREE.Group();btn.position.set(5.9,BB,2.05);scene.add(btn);
+mk(B(1.2,.36,1.2),M(0x1a1c20,{roughness:.5}),[0,.2,0],btn);
+[[-.48,-.48],[.48,-.48],[-.48,.48],[.48,.48]].forEach(p=>mk(C(.06,.04,12),metal,[p[0],.4,p[1]],btn,false));
+const capM=M(0xf5c400,{roughness:.35});const cap=mk(C(.36,.3,32),capM,[0,.52,0],btn);
+
+/* ---- LCD 16x2 on a stand ---- */
+const lcd=new THREE.Group();lcd.position.set(4.2,3.45,-5.6);lcd.rotation.x=-.22;scene.add(lcd);
+const pcbG=M(0x1d6b3d,{roughness:.55});
+mk(B(8,3.6,.16),pcbG,[0,0,0],lcd);
+mk(B(7.1,2.45,.55),M(0x0d0f12,{roughness:.4}),[0,.05,.35],lcd);
+[[-3.75,1.55],[3.75,1.55],[-3.75,-1.55],[3.75,-1.55]].forEach(p=>mk(C(.17,.18,16),metal,[p[0],p[1],.08],lcd,false).rotation.x=Math.PI/2);
+const lcdC=document.createElement('canvas');lcdC.width=1024;lcdC.height=232;const lcdX=lcdC.getContext('2d');const lcdT=tx(lcdC);
+const screen=mk(new THREE.PlaneGeometry(6.45,1.46),new THREE.MeshBasicMaterial({map:lcdT,toneMapped:false}),[0,.05,.63],lcd,false);
+mk(B(4.4,1.9,.12),M(0x14161a),[-.3,-.2,-.16],lcd);mk(B(.55,.55,.3),M(0x2f6fd8),[.9,.3,-.32],lcd);
+const lcdPin=[];[.38,.13,-.13,-.38].forEach(y=>{mk(B(.4,.06,.06),gold,[-4.2,y,-.18],lcd,false);lcdPin.push(new THREE.Vector3(-4.4,y,-.18))});
+const acr=M(0x22272e,{roughness:.3,metalness:.2,transparent:true,opacity:.85});
+[-3.3,3.3].forEach(x=>mk(B(.35,3.5,.35),acr,[x,-2.0,-.4],lcd));
+let lcdKey='';
+function drawLcd(l1,l2,on){
+  const k=l1+'|'+l2+'|'+on;if(k===lcdKey)return;lcdKey=k;const c=lcdX,W=1024,H=232;
+  const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,on?'#2f62f0':'#1a2a52');g.addColorStop(1,on?'#1f49cf':'#13203f');c.fillStyle=g;c.fillRect(0,0,W,H);
+  const cw=58,ch=92,ox=(W-16*cw)/2+2,oy=[18,122];
+  [l1.padEnd(16).slice(0,16),l2.padEnd(16).slice(0,16)].forEach((ln,r)=>{for(let i=0;i<16;i++){const x=ox+i*cw,y=oy[r];
+    c.fillStyle='rgba(120,160,255,.16)';c.fillRect(x+3,y,cw-6,ch);
+    c.fillStyle='#f2f6ff';c.font='600 72px "IBM Plex Mono",monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(ln[i],x+cw/2,y+ch/2+4)}});
+  lcdT.needsUpdate=true;
+}
+
+/* ---- wires ---- */
+scene.updateMatrixWorld(true);
+const wp=o=>o.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.04,0));
+const at=(g,v)=>g.localToWorld(v.clone());
+const wires=[];
+function wire(a,b,col,part,lift=1){
+  const d=a.distanceTo(b),h=(.9+d*.13)*lift,m=a.clone().lerp(b,.5);m.y=Math.max(a.y,b.y)+h;
+  const curve=new THREE.CatmullRomCurve3([a,a.clone().add(new THREE.Vector3(0,.5,0)),m,b.clone().add(new THREE.Vector3(0,.45,0)),b]);
+  const mat=M(col,{roughness:.4,emissive:col,emissiveIntensity:0});mat.color.multiplyScalar(1.15);
+  const t=mk(new THREE.TubeGeometry(curve,64,.065,10,false),mat,[0,0,0],scene);wires.push({mat,part});
+  [a,b].forEach(p=>mk(B(.16,.32,.16),M(0x15171a),[p.x,p.y+.12,p.z],scene,false));
+}
+wire(wp(pads['R3V3']),at(dht,dhtPin[0]),W.red,'dht');
+wire(wp(pads['RD15']),at(dht,dhtPin[1]),W.yel,'dht',1.15);
+wire(wp(pads['RGND']),at(dht,dhtPin[3]),W.blk,'dht',.8);
+wire(wp(pads['RD18']),at(buz,new THREE.Vector3(.38,.02,0)),W.org,'buz',1.3);
+wire(wp(pads['LGND']),at(buz,new THREE.Vector3(-.38,.02,0)),W.blk,'buz',1.5);
+wire(wp(pads['RD4']),at(btn,new THREE.Vector3(-.5,.02,.5)),W.grn,'btn',1.4);
+wire(wp(pads['LGND']).add(new THREE.Vector3(.02,0,0)),at(btn,new THREE.Vector3(.5,.02,.5)),W.blk,'btn',1.7);
+wire(wp(pads['RD21']),at(lcd,lcdPin[2]),W.blu,'lcd',.7);
+wire(wp(pads['RD22']),at(lcd,lcdPin[3]),W.pur,'lcd',.6);
+wire(wp(pads['LVIN']),at(lcd,lcdPin[1]),W.red,'lcd',.6);
+wire(wp(pads['LGND']),at(lcd,lcdPin[0]),W.blk,'lcd',.5);
+
+/* ---- packets & buffer ---- */
+const pktG=new THREE.SphereGeometry(.16,20,14),pktM=new THREE.MeshBasicMaterial({color:0x36d3bd,toneMapped:false,transparent:true});
+const haloT=tx(canvas(64,64,(c)=>{const g=c.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.3,'rgba(255,255,255,.35)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,64,64)}));
+const packets=[];
+function spawn(from,color=0x36d3bd){const g=new THREE.Group();const s=new THREE.Mesh(pktG,pktM.clone());s.material.color.set(color);g.add(s);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:haloT,color,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));sp.scale.set(1.4,1.4,1);g.add(sp);
+  g.position.copy(from);scene.add(g);packets.push({g,from:from.clone(),t0:performance.now(),dur:1500})}
+const cubeG=new THREE.BoxGeometry(.34,.24,.34),cubeM=M(0xf0a330,{emissive:0xf08a10,emissiveIntensity:.55,roughness:.4});
+const cubes=[];const BUFX=-7.6;
+const slot=i=>new THREE.Vector3(BUFX+Math.floor(i/15)*.46,BB+.14+(i%15)*.27,-2.1);
+hooks.buffer=()=>{if(cubes.length>=BUF_SIZE){/* ring overwrite: keep count */return}
+  const c=mk(cubeG,cubeM,[0,0,0],scene);c.position.copy(slot(cubes.length));c.scale.setScalar(.01);c.userData.t0=performance.now();cubes.push(c)};
+hooks.flush=()=>{const c=cubes.pop();if(c){spawn(c.position.clone(),0xf0a330);scene.remove(c)}else spawn(wp(antenna))};
+hooks.publish=()=>spawn(wp(antenna));
+
+/* ---- focus ring ---- */
+const ring=new THREE.Mesh(new THREE.RingGeometry(1.15,1.3,64),new THREE.MeshBasicMaterial({color:0x36d3bd,transparent:true,opacity:0,side:THREE.DoubleSide,toneMapped:false}));
+ring.rotation.x=-Math.PI/2;scene.add(ring);
+const PARTS={esp:{g:esp,c:[-4.2,BB+.95,0],s:2.6,cam:[-6,10,10]},dht:{g:dht,c:[.6,BB+1.4,2.05],s:1.2,cam:[2.5,8,12]},lcd:{g:lcd,c:[4.2,3.45,-5.6],s:3.6,cam:[3,7.5,9]},buz:{g:buz,c:[3.4,BB+.6,2.05],s:1,cam:[3.5,8,11]},btn:{g:btn,c:[5.9,BB+.5,2.05],s:1,cam:[5,8,11]}};
+const STEP_OF={esp:1,dht:2,lcd:3,buz:4,btn:5};
+let focus=null,fly=null;
+goStep=part=>{focus=part;
+  wires.forEach(w=>w.mat.emissiveIntensity=part&&w.part===part?.7:0);
+  let p,t;if(part){const P=PARTS[part];t=new THREE.Vector3(...P.c);p=t.clone().add(new THREE.Vector3(...P.cam));ring.position.set(P.c[0],BB+.03+(part==='lcd'?-BB+.02:0),P.c[2]+(part==='lcd'?.2:0));ring.scale.setScalar(P.s)}
+  else{p=HOME.p.clone();t=HOME.t.clone()}
+  if(innerWidth<640)p.sub(t).multiplyScalar(1.35).add(t);
+  fly={p0:cam.position.clone(),t0:ctr.target.clone(),p,t,s:performance.now(),d:reduce?1:1100};
+  labels.forEach(l=>l.el.classList.toggle('f',l.part===part));
+};
+
+/* ---- labels ---- */
+const lbls=$('#lbls');
+const labels=[['esp','ESP32',[-4.2,BB+1.6,-1.4]],['dht','DHT22 · GPIO15',[.6,BB+3.2,2.05]],['lcd','LCD I2C · 0x27',[4.2,5.6,-5.9]],['buz','Buzzer · GPIO18',[3.4,BB+1.5,2.05]],['btn','WiFi btn · GPIO4',[5.9,BB+1.15,2.05]],['buf','buffer 0/60',[BUFX+.7,BB+.5,-2.1]]]
+ .map(([part,t,p])=>{const el=document.createElement('div');el.className='lb'+(part==='buf'?' bf':'');el.textContent=t;lbls.appendChild(el);return{part,el,p:new THREE.Vector3(...p)}});
+const bufLbl=labels.find(l=>l.part==='buf');
+
+/* ---- picking ---- */
+const ray=new THREE.Raycaster(),v2=new THREE.Vector2();let down=null;const cv=ren.domElement;
+const pick=e=>{const r=cv.getBoundingClientRect();v2.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(v2,cam);
+  const hit=ray.intersectObjects([esp,dht,lcd,buz,btn],true)[0];if(!hit)return null;let o=hit.object;while(o&&![esp,dht,lcd,buz,btn].includes(o))o=o.parent;return o};
+cv.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
+cv.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const o=pick(e);if(!o)return;
+  if(o===btn){btnPress=performance.now();setOutage(!S.outage);showStep(5)}else{const k=Object.keys(PARTS).find(k=>PARTS[k].g===o);showStep(STEP_OF[k])}});
+cv.addEventListener('pointermove',e=>{if(e.pointerType==='mouse')cv.style.cursor=pick(e)?'pointer':'grab'});
+ctr.addEventListener('start',()=>{fly=null});
+let btnPress=0;
+
+hooks.redraw=()=>{
+  const l1=S.sensorError||isNaN(S.lastT)?'T:--.-C H:--%':`T:${S.lastT.toFixed(1)}C H:${S.lastH.toFixed(0)}%`;
+  drawLcd(l1,statusText().padEnd(12)+(online()?'ON':'OFF'),true);
+  capM.color.copy(lin(S.outage?0xff9f1a:0xf5c400));capM.emissive.copy(lin(S.outage?0xff7a00:0));capM.emissiveIntensity=S.outage?.6:0;
+  bufLbl.el.textContent=`buffer ${S.buf.length}/60`;
+};
+
+/* ---- loop ---- */
+const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const size=()=>{const w=stage.clientWidth,h=stage.clientHeight;ren.setSize(w,h,false);cam.aspect=w/h;cam.fov=w<640?44:36;cam.updateProjectionMatrix()};
+new ResizeObserver(size).observe(stage);size();
+const tmp=new THREE.Vector3();
+(function loop(now){requestAnimationFrame(loop);now=now||0;
+  if(fly){const k=Math.min(1,(now-fly.s)/fly.d),e=ease(k);cam.position.lerpVectors(fly.p0,fly.p,e);ctr.target.lerpVectors(fly.t0,fly.t,e);if(k>=1)fly=null}
+  ctr.update();
+  for(let i=packets.length-1;i>=0;i--){const p=packets[i],k=(now-p.t0)/p.dur;if(k>=1){scene.remove(p.g);packets.splice(i,1);continue}
+    const e=ease(Math.min(1,k));p.g.position.set(p.from.x+e*3,p.from.y+e*13,p.from.z-e*6);p.g.children.forEach(c=>c.material.opacity=1-k*k);p.g.scale.setScalar(1-k*.4)}
+  cubes.forEach(c=>{if(c.userData.t0){const k=Math.min(1,(now-c.userData.t0)/350);c.scale.setScalar(.01+.99*ease(k));if(k>=1)c.userData.t0=0}});
+  const al=S.alarm&&!S.sensorError;
+  rings.forEach((r,i)=>{const k=((now/900)+i/3)%1;r.scale.setScalar(.6+k*1.8);r.material.opacity=al?(1-k)*.8:0});
+  buz.position.x=3.4+(al&&!reduce?Math.sin(now*.09)*.012:0);
+  ring.material.opacity=focus?.45+.3*Math.sin(now/300):0;
+  const bp=Math.min(1,(now-btnPress)/250);cap.position.y=.52-(bp<1?Math.sin(bp*Math.PI)*.12:0);
+  if(showL){const r=cv.getBoundingClientRect();labels.forEach(l=>{tmp.copy(l.p).project(cam);const vis=tmp.z<1&&Math.abs(tmp.x)<1.05&&Math.abs(tmp.y)<1.05;
+    l.el.style.opacity=vis?1:0;l.el.style.left=((tmp.x+1)/2*r.width)+'px';l.el.style.top=((1-tmp.y)/2*r.height)+'px'})}
+  ren.render(scene,cam)})();
+
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{lcdKey='';hooks.redraw()});
+showStep(0);ui();
+}
+}
+</script>
+</body>
+</html>
