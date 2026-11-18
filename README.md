@@ -2,7 +2,7 @@
 
 محاكاة تعليمية ثلاثية الأبعاد لمشروع ESP32 + DHT22 + LCD I2C + Buzzer، مع إرسال القراءات إلى ThingsBoard عبر MQTT.
 
-**افتح المحاكي:** https://yasserabuhowar.github.io/ESP32-stimulator-/
+**افتح المحاكي:** https://yasserabuhowar.github.io/esp32-iot-lab-simulator/
 
 ## المحتوى
 - طاولة عمل ثلاثية الأبعاد بالتوصيل الحقيقي: DHT22 على GPIO15، وLCD على 21/22، وBuzzer على 18، وزر محاكاة انقطاع WiFi على 4.
